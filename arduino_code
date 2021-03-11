@@ -1,0 +1,259 @@
+#include <SPI.h>
+#include <MFRC522.h>
+#include<SoftwareSerial.h>
+
+SoftwareSerial comm(2,3);
+
+String IP="";
+String server;
+
+constexpr uint8_t RST_PIN = 9;
+constexpr uint8_t SS_PIN = 10; 
+MFRC522 rfid(SS_PIN, RST_PIN);
+
+
+String str[5],ui[5],uid;
+int z=0,k=0;
+int y[5]={0};
+
+void setup() 
+{
+  SPI.begin();
+  rfid.PCD_Init();
+  Serial.begin(115200);
+  comm.begin(115200);
+  wifi_init();
+  lo();
+}
+
+void lo() 
+{
+      Serial.println("\nScan the Vial");
+      l1:delay(1000);
+      if ( !rfid.PICC_IsNewCardPresent())
+      {
+          goto l1;
+      }
+      
+      if ( !rfid.PICC_ReadCardSerial())
+      {
+          goto l1;
+      }
+      rfid.PICC_HaltA();
+      Serial.print("The Vial Number is: ");
+      String temp;
+     
+      byte nuid[4];
+      for (byte i = 0; i < rfid.uid.size; i++) 
+      {
+          nuid[i] = rfid.uid.uidByte[i];
+          Serial.print(nuid[i]);
+          temp=temp+nuid[i];
+      }
+      uid=temp;
+      Serial.println();
+
+      for(int j=0;j<z;j++)
+      {     
+          if(str[j]==temp)
+          {
+             if(y[j]==5)
+             {
+                Serial.println("This is already Used");   
+             }
+             else
+             {
+                qrcode();
+                y[j]++;
+                delay(1000);
+             }
+             return;
+          }
+      }
+      qrcode();
+      str[z]=temp;
+      y[z]++;
+      z=z+1;
+}
+
+void qrcode()
+{
+  Serial.println("Enter 12 digit Aadhar Number");
+  String qr;
+  l4: while (Serial.available() == 0) {}  
+  qr = Serial.readString();
+  for(int x=0;x<k;x++)
+  {
+    if(ui[x]==qr)
+    {
+      Serial.println("This Aadhar number is already used\nEnter Another Aadhar Number");
+      goto l4;
+    }
+  }
+  ui[k]=qr;
+  k=k+1;
+  Serial.print("The Vial ");
+  Serial.print(uid);
+  Serial.print(" is linked with Aadhar Number ");
+  Serial.println(qr);
+}
+
+void loop()
+{
+  for(int n=0;n<100;n++)
+  {
+    web();
+  }
+  lo();
+}
+
+void web()
+{
+  int b=0;
+  while(b<10000)
+  {
+    b++;
+    while(comm.available())
+    {
+      if(comm.find("0,CONNECT"))
+      {
+        //Serial.println("Starting");
+        sendToServer();
+        //Serial.println("Finished");
+        delay(1000);
+      }
+    }
+  }
+}
+
+void wifi_init()
+{
+  establishConnection("AT",100);
+  Serial.print("Connecting to Web Server.......");
+  //delay(1000);
+  establishConnection("AT+CWMODE=1",100);
+  //delay(1000);
+  establishConnection("AT+CWQAP",100);
+  Serial.println("......"); 
+   Serial.println("Connecting Wifi....");
+    establishConnection("AT+CWJAP=\"WIFI NOT FOUND\",\"244466666\"",7000);
+  Serial.println("\nArduino Connected to Server"); 
+  showIP();
+  establishConnection("AT+CIPMUX=1",100);
+  establishConnection("AT+CIPSERVER=1,80",100);
+}
+
+void establishConnection(String command, int timeOut)
+{
+  int q=0;
+  while(1)
+  {
+    //Serial.println(command);
+    comm.println(command); 
+    while(comm.available())
+    {
+      if(comm.find("OK"))
+      {
+        q=8;
+      }
+    }
+    delay(timeOut);
+    if(q>5)
+    {
+      break;
+    }
+    q++;
+  }
+  if(q!=8)
+  {
+    Serial.println("Error");
+  }
+}
+
+
+void showIP()
+{
+  IP="";
+  char ch=0;
+  while(1)
+  {
+    comm.println("AT+CIFSR");
+    while(comm.available()>0)
+    {
+      if(comm.find("STAIP,"))
+      {
+        delay(1000);
+        Serial.print("IP Address:");
+        while(comm.available()>0)
+        {
+          ch=comm.read();
+          if(ch=='+')
+          {
+            break;
+          }
+          IP+=ch;
+        }
+      }
+      if(ch=='+')
+      {
+        break;
+      }
+    }
+    if(ch=='+')
+    {
+      break;
+    }
+    delay(1000);
+  }
+  Serial.print(IP);
+  Serial.print("Port:");
+  Serial.println(80);
+  delay(1000);
+}
+
+
+void sendToServer()
+{ 
+    server = "<h1 style=\"font-size:50px\">DATA VISUALIZATION AND REAL TIME MONITORING OF VACCINE VIALS IN RURAL AREAS</h1>";
+ // server = "<html> <body> <h1>DATA VISUALIZATION AND REAL TIME MONITORING OF VACCINE VIALS IN RURAL AREAS</h1> <p id=\"demo\"></p> <script> function myFunction() { document.getElementById(\"demo\").innerHTML = \""+str[z-1]+" - "+ui[k-1]+"\"; } myFunction(); </script> </body> </html>";
+ // server = "<html> <head> <h1>DATA VISUALIZATION AND REAL TIME MONITORING OF VACCINE VIALS IN RURAL AREAS</h1> <script> function writeTable(){ var myList = [ \"name1\", \"name2\", \"etc\", \"etc\"]; var outputTable = \"<table>\" var outputDiv = document.getElementById(\"output\"); for (var i=0; i<myList.length; i++){ outputTable += \"</tr><td>\"+i+\"</td><td>\"+myList[i]+\"</td></tr>\"; } outputTable += \"</table>\"; outputDiv.innerHTML = outputTable; } </script> </head> <body onload=writeTable()> <div id='output'></div> </body> </html>";
+ // server = "<html> <body> <h1>DATA VISUALIZATION AND REAL TIME MONITORING OF VACCINE VIALS IN RURAL AREAS</h1> <p id=\"demo\"></p> <script> function myFunction() { document.getElementById(\"demo\").innerHTML = \"Hello World!\"; } myFunction(); </script> </body> </html>";
+ // server = "<h1>DATA VISUALIZATION AND REAL TIME MONITORING OF VACCINE VIALS IN RURAL AREAS</h1> <p id=\"demo\"></p> <script> function myFunction() { document.getElementById(\"demo\").innerHTML = \""+str[z-1]+"  \"; } myFunction(); </script>";
+  //server="<h1>DATA VISUALIZATION AND REAL TIME MONITORING OF VACCINE VIALS IN RURAL AREAS</h1>";
+   //server ="<!DOCTYPE html> <html> <head> <title> Vaccine Vials Database </title> <style> .text { background-color: rgba(0,0,0, 0.4); /* Black w/opacity/see-through */ color: white; } </style> <script type=\"text/javascript\"> var rfidarray = []; var countsarray = []; var uidaiarray = []; var i=0,j=0,z; function inp1() { x=document.getElementById(\"RFID\").value; y=document.getElementById(\"UIDAI\").value; if (x.length<8) { alert(\"Kindly enter 8 digit RFID number\"); } else if(y.length<12) { alert(\"Kindly enter 12 digit UIDAI number\"); } else { for(z=0;z<rfidarray.length;z++) { if(rfidarray[z]==x) { if(countsarray[z]==5) { alert(\"This RFID card is already used to maximum\"); } else { for(k=0;k<uidaiarray.length;k++) { if(uidaiarray[k]==y) { alert(\"This UIDAI is already used\"); return; } } uidaiarray[j]=y; j=j+1; countsarray[z]=countsarray[z]+1; alert(\"RFID and UIDAI are successfully updated\"); } return; } } for(k=0;k<uidaiarray.length;k++) { if(uidaiarray[k]==y) { alert(\"This UIDAI is already used\"); return; } } uidaiarray[j]=y; j=j+1; alert(\"RFID and UIDAI are successfully updated\"); rfidarray[i]=x; countsarray[i]=1; i=i+1; } } </script> </head> <body> <div class=\"text\"> <h1>DATA VISUALIZATION AND REAL TIME MONITORING OF VACCINE VIALS IN RURAL AREAS</h1> <br> <h2>Enter RFID: </h2> <input class=\"class-name\" name=\"elementname\" type=\"text\" onfocus=\"this.value=''\" maxlength=\"8\" size=\"23\" id=\"RFID\" placeholder=\"Enter 8 digit RFID number\" onkeyup=\"this.value=this.value.replace(/[^a-zA-Z0-9]/g, '')\" /> <br> <h2>Enter UIDAI number:</h2> <input class=\"class-name\" name=\"elementname\" type=\"text\" maxlength=\"12\" size=24 onfocus=\"this.value=''\" onkeypress=\"return (event.charCode == 8 || event.charCode == 0 || event.charCode == 13) ? null : event.charCode >= 48 && event.charCode <= 57\" id=\"UIDAI\" placeholder=\"Enter 12 digit Aadhar number\" /> <br> <br> <button onclick=\"inp1()\" id=\"btn1\">Submit</button> </div> </body> </html>";
+
+    sendData(server);
+    server="<style> body { background-color: black; text-align: center; color: white; font-family: Arial, Helvetica, sans-serif; } </style>";
+     server+= "<p style=\"font-size:30px\">Vial scanned "+str[z-1]+" is linked with Aadhar Number "+ui[k-1]+"<p>";
+     sendData(server);
+    comm.println("AT+CIPCLOSE=0");
+}
+
+void sendData(String server1)
+{
+  int p=0;
+  while(1)
+  {
+    unsigned int l=server1.length();
+    //Serial.print("AT+CIPSEND=0,");
+    comm.print("AT+CIPSEND=0,");
+    //Serial.println(l+2);
+   comm.println(l+2);
+    delay(100);
+    //Serial.println(server1);
+    comm.println(server1);
+    while(comm.available())
+    {
+      if(comm.find("OK"))
+      {
+        p=11;
+        break;
+      }
+    }
+    if(p==11)
+    {
+      break;
+    }
+    delay(100);
+  }
+}
